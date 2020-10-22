@@ -1,0 +1,4 @@
+*.xml
+etc/
+log/
+!etc/templates/lab1_laptop/
