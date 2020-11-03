@@ -267,3 +267,4 @@ hs_err_pid*
 etc/
 log/
 *.xml
+!multilateraltournament.xml

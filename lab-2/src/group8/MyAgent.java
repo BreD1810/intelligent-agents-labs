@@ -24,8 +24,9 @@ import genius.core.utility.EvaluatorDiscrete;
  */
 public class MyAgent extends AbstractNegotiationParty
 {
-	private static double MINIMUM_TARGET = 0.8;
+	private double MINIMUM_TARGET;
 	private Bid lastOffer;
+	private double concedeThreshold;
 
 	/**
 	 * Initializes a new instance of the agent.
@@ -57,6 +58,11 @@ public class MyAgent extends AbstractNegotiationParty
 				}
 			}
 		}
+
+		Double minUtility = getUtility(getMinUtilityBid());
+		Double maxUtility = getUtility(getMaxUtilityBid());
+		concedeThreshold = (maxUtility + minUtility) / 2;
+		MINIMUM_TARGET = maxUtility;
 	}
 
 	/**
@@ -68,14 +74,45 @@ public class MyAgent extends AbstractNegotiationParty
 	{
 		// Check for acceptance if we have received an offer
 		if (lastOffer != null)
+		{
+			double timeDependentThreshold = concedeThreshold + ((1 - timeline.getTime()) * (getUtility(getMaxUtilityBid()) - concedeThreshold));
+			System.out.println("Current time Threshold: " + timeDependentThreshold);
+			MINIMUM_TARGET = Math.max(timeDependentThreshold, concedeThreshold);
+			System.out.println("MINIMUM_TARGET: " + MINIMUM_TARGET);
+			System.out.println("Concede Threshold: " + concedeThreshold);
+			System.out.println();
 			if (timeline.getTime() >= 0.99)
-				if (getUtility(lastOffer) >= utilitySpace.getReservationValue()) 
+			{
+				if (getUtility(lastOffer) >= concedeThreshold)
 					return new Accept(getPartyId(), lastOffer);
 				else
 					return new EndNegotiation(getPartyId());
-		
+			}
+			else if (getUtility(lastOffer) >= MINIMUM_TARGET)
+			{
+				return new Accept(getPartyId(), lastOffer);
+			}
+		}
 		// Otherwise, send out a random offer above the target utility 
 		return new Offer(getPartyId(), generateRandomBidAboveTarget());
+	}
+
+	private Bid getMaxUtilityBid() {
+		try {
+			return utilitySpace.getMaxUtilityBid();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	private Bid getMinUtilityBid() {
+		try {
+			return utilitySpace.getMinUtilityBid();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
 	}
 
 	private Bid generateRandomBidAboveTarget() 
