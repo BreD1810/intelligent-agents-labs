@@ -1,5 +1,6 @@
 package group8;
 
+import java.util.HashMap;
 import java.util.List;
 
 import genius.core.AgentID;
@@ -26,7 +27,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 {
 	private static double MINIMUM_TARGET = 0.8;
 	private Bid lastOffer;
-	private int[][] frequencyTable;
+	private HashMap<Integer, HashMap<String, Integer>> frequencyTable = new HashMap<>();
 
 	/**
 	 * Initializes a new instance of the agent.
@@ -40,11 +41,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 
 		List<Issue> issues = additiveUtilitySpace.getDomain().getIssues();
 
-		int noIssues = issues.size();
-		frequencyTable = new int[noIssues][];
-
-		for (int i = 0; i < issues.size(); i++) {
-			Issue issue = issues.get(i);
+		for (Issue issue : issues) {
 			int issueNumber = issue.getNumber();
 			System.out.println(">> " + issue.getName() + " weight: " + additiveUtilitySpace.getWeight(issueNumber));
 
@@ -52,8 +49,12 @@ public class JohnyBlack extends AbstractNegotiationParty
 			IssueDiscrete issueDiscrete = (IssueDiscrete) issue;
 			EvaluatorDiscrete evaluatorDiscrete = (EvaluatorDiscrete) additiveUtilitySpace.getEvaluator(issueNumber);
 
+			HashMap<String, Integer> issueHashMap = new HashMap<>();
+
 			for (ValueDiscrete valueDiscrete : issueDiscrete.getValues()) {
-				System.out.println(valueDiscrete.getValue());
+				String value = valueDiscrete.getValue();
+				issueHashMap.put(value, 0);
+				System.out.println(value);
 				System.out.println("Evaluation(getValue): " + evaluatorDiscrete.getValue(valueDiscrete));
 				try
 				{
@@ -63,7 +64,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 				}
 			}
 
-			frequencyTable[i] = new int[((IssueDiscrete) issue).getNumberOfValues()];
+			frequencyTable.put(issueNumber, issueHashMap);
 		}
 	}
 
@@ -115,11 +116,11 @@ public class JohnyBlack extends AbstractNegotiationParty
 			// Update frequency table
 			List<Issue> issues = lastOffer.getIssues();
 
-			for (int i = 0; i < issues.size(); i++) {
-				ValueDiscrete value = (ValueDiscrete) lastOffer.getValue(i+1);
-				IssueDiscrete discreteIssue = (IssueDiscrete) issues.get(i);
-				int valueIndex = discreteIssue.getValues().indexOf(value);
-				frequencyTable[i][valueIndex] += 1;
+			for (Issue issue : issues) {
+				int issueNumber = issue.getNumber();
+				String value = ((ValueDiscrete) lastOffer.getValue(issueNumber)).getValue();
+				int currentCount = frequencyTable.get(issueNumber).get(value);
+				frequencyTable.get(issueNumber).put(value, currentCount + 1);
 			}
 
 			printFrequencyTable();
@@ -127,11 +128,11 @@ public class JohnyBlack extends AbstractNegotiationParty
 	}
 
 	private void printFrequencyTable() {
-		System.out.println("Frequency tables");
-		for (int i = 0; i < frequencyTable.length; i++) {
-			System.out.print("Issue" + i + " ");
-			for (int o = 0; o < frequencyTable[i].length; o++) {
-				System.out.print(frequencyTable[i][o] + " ");
+		System.out.println("Frequency table");
+		for (Integer issueNo : frequencyTable.keySet()) {
+			System.out.print("Issue" + issueNo + " ");
+			for (String option : frequencyTable.get(issueNo).keySet()) {
+				System.out.print(frequencyTable.get(issueNo).get(option) + " ");
 			}
 			System.out.println();
 		}
