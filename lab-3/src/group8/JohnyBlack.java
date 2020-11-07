@@ -1,5 +1,7 @@
 package group8;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
@@ -28,6 +30,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 	private static double MINIMUM_TARGET = 0.8;
 	private Bid lastOffer;
 	private HashMap<Integer, HashMap<String, Integer>> frequencyTable = new HashMap<>();
+	private int noBids = 0;
 
 	/**
 	 * Initializes a new instance of the agent.
@@ -113,6 +116,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 			lastOffer = ((Offer) action).getBid();
 
 			System.out.println("Received offer: " + lastOffer.toString());
+			noBids += 1;
 			// Update frequency table
 			List<Issue> issues = lastOffer.getIssues();
 
@@ -124,7 +128,83 @@ public class JohnyBlack extends AbstractNegotiationParty
 			}
 
 			printFrequencyTable();
+			double predictedValue = predictValuation(lastOffer, issues);
+			System.out.println("Predicted value: " + predictedValue);
 		}
+	}
+
+	/**
+	 * Predict the valuation of an offer for an opponent.
+	 * @param offer The offer the opponent has made
+	 * @param issues The issues that the offer negotiates over
+	 * @return
+	 */
+	private double predictValuation(Bid offer, List<Issue> issues)
+	{
+		double value = 0;
+		double[] optionValues = getOptionValues(offer, issues);
+		double[] normalisedWeights = getNormalisedWeights(issues);
+		for (int i = 0; i < optionValues.length; i++)
+			value += optionValues[i] * normalisedWeights[i];
+
+		return value;
+	}
+
+	/**
+	 * Calculate the value of an opponent's options
+	 * @param bid The bid provided by the opponent
+	 * @param issues A list of issues that the bid negotiates about
+	 * @return A list of option values, calculated using preference order
+	 */
+	private double[] getOptionValues(Bid bid, List<Issue> issues) {
+		double[] optionValues = new double[issues.size()];
+		for (int i = 0; i < issues.size(); i++)
+		{
+			Issue issue = issues.get(i);
+			int issueNumber = issue.getNumber();
+			HashMap<String, Integer> options = frequencyTable.get(issueNumber);
+			double noOptions = options.keySet().size();
+
+			String chosenOption = ((ValueDiscrete) bid.getValue(issueNumber)).getValue();
+			int rank = 0;
+			int optionValue = options.get(chosenOption);
+			for (String option : options.keySet())
+			{
+				if (options.get(option) >= optionValue)
+					rank += 1;
+			}
+
+			optionValues[i] = (noOptions - rank + 1) / noOptions;
+		}
+
+		return optionValues;
+	}
+
+	/**
+	 * Get the normalised weights for each issue, using the Gini Index
+	 * @param issues A list of issues that the bid negotiates about
+	 * @return An array of weights
+	 */
+	private double[] getNormalisedWeights(List<Issue> issues) {
+		double[] weights = new double[issues.size()];
+		double noBidsSquared = Math.pow(noBids, 2);
+
+		for (int i = 0; i < issues.size(); i++)
+		{
+			List<Integer> optionCounts = new ArrayList<>(frequencyTable.get(issues.get(i).getNumber()).values());
+			double weight = 0;
+			for (Integer option : optionCounts)
+				weight += (Math.pow(option, 2) / noBidsSquared);
+
+			weights[i] = weight;
+		}
+
+		double weightSum = Arrays.stream(weights).sum();
+		double[] normalisedWeights = new double[issues.size()];
+		for (int i = 0; i < weights.length; i++)
+			normalisedWeights[i] = weights[i] / weightSum;
+
+		return normalisedWeights;
 	}
 
 	private void printFrequencyTable() {
