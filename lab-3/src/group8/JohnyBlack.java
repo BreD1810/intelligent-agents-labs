@@ -107,7 +107,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 		}
 
 		// Otherwise, send out a random offer above the target utility 
-		return new Offer(getPartyId(), generateRandomBidAboveTarget());
+		return new Offer(getPartyId(), generateApproxParetoOfferAboveTarget(10));
 	}
 
 	private Bid getMaxUtilityBid() {
@@ -128,20 +128,37 @@ public class JohnyBlack extends AbstractNegotiationParty
 		return null;
 	}
 
-
-	private Bid generateRandomBidAboveTarget() 
+	/**
+	 * Sample a number of bids above the threshold, and select one that is approximately pareto efficient
+	 * @param sampleSize The size of the sample to take
+	 * @return The approximately pareto efficient bid
+	 */
+	private Bid generateApproxParetoOfferAboveTarget(int sampleSize)
 	{
-		Bid randomBid;
-		double util;
-		int i = 0;
-		// try 100 times to find a bid under the target utility
-		do 
+		double maxOpponentUtil = 0;
+		Bid approxParetoBid = null;
+
+		for (int n = 0; n < sampleSize; n++)
 		{
-			randomBid = generateRandomBid();
-			util = utilitySpace.getUtility(randomBid);
-		} 
-		while (util < MINIMUM_TARGET && i++ < 100);		
-		return randomBid;
+			Bid randomBid;
+			double util;
+			int i = 0;
+			// try 100 times to find a bid under the target utility
+			do
+			{
+				randomBid = generateRandomBid();
+				util = utilitySpace.getUtility(randomBid);
+
+				// Estimate opponent utility
+				double opponentUtil = predictValuation(randomBid);
+			}
+			while (util < MINIMUM_TARGET && i++ < 100);
+
+			if (util > maxOpponentUtil)
+				approxParetoBid = randomBid;
+		}
+
+		return approxParetoBid;
 	}
 
 	/**
@@ -167,7 +184,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 			}
 
 			printFrequencyTable();
-			double predictedValue = predictValuation(lastOffer, issues);
+			double predictedValue = predictValuation(lastOffer);
 			System.out.println("Predicted value: " + predictedValue);
 		}
 	}
@@ -175,11 +192,11 @@ public class JohnyBlack extends AbstractNegotiationParty
 	/**
 	 * Predict the valuation of an offer for an opponent.
 	 * @param offer The offer the opponent has made
-	 * @param issues The issues that the offer negotiates over
 	 * @return The predicted utility value of the opponent
 	 */
-	private double predictValuation(Bid offer, List<Issue> issues)
+	private double predictValuation(Bid offer)
 	{
+		List<Issue> issues = offer.getIssues();
 		double value = 0;
 		double[] optionValues = getOptionValues(offer, issues);
 		double[] normalisedWeights = getNormalisedWeights(issues);
