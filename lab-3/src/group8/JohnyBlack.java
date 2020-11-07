@@ -27,8 +27,9 @@ import genius.core.utility.EvaluatorDiscrete;
  */
 public class JohnyBlack extends AbstractNegotiationParty
 {
-	private static double MINIMUM_TARGET = 0.8;
+	private static double MINIMUM_TARGET;
 	private Bid lastOffer;
+	private double concedeThreshold;
 	private HashMap<Integer, HashMap<String, Integer>> frequencyTable = new HashMap<>();
 	private int noBids = 0;
 
@@ -68,6 +69,11 @@ public class JohnyBlack extends AbstractNegotiationParty
 			}
 
 			frequencyTable.put(issueNumber, issueHashMap);
+
+			double minUtility = getUtility(getMinUtilityBid());
+			double maxUtility = getUtility(getMaxUtilityBid());
+			concedeThreshold = (maxUtility + minUtility) / 2;
+			MINIMUM_TARGET = maxUtility;
 		}
 	}
 
@@ -80,15 +86,48 @@ public class JohnyBlack extends AbstractNegotiationParty
 	{
 		// Check for acceptance if we have received an offer
 		if (lastOffer != null)
+		{
+			double timeDependentThreshold = concedeThreshold + ((1 - timeline.getTime()) * (getUtility(getMaxUtilityBid()) - concedeThreshold));
+			System.out.println("Current time threshold: " + timeDependentThreshold);
+			MINIMUM_TARGET = Math.max(timeDependentThreshold, concedeThreshold);
+			System.out.println("Minimum target: " + MINIMUM_TARGET);
+			System.out.println("Concede threshold: " + concedeThreshold);
+			System.out.println();
 			if (timeline.getTime() >= 0.99)
-				if (getUtility(lastOffer) >= utilitySpace.getReservationValue()) 
+			{
+				if (getUtility(lastOffer) >= concedeThreshold)
 					return new Accept(getPartyId(), lastOffer);
 				else
 					return new EndNegotiation(getPartyId());
-		
+			}
+			else if (getUtility(lastOffer) >= MINIMUM_TARGET)
+			{
+				return new Accept(getPartyId(), lastOffer);
+			}
+		}
+
 		// Otherwise, send out a random offer above the target utility 
 		return new Offer(getPartyId(), generateRandomBidAboveTarget());
 	}
+
+	private Bid getMaxUtilityBid() {
+		try {
+			return utilitySpace.getMaxUtilityBid();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	private Bid getMinUtilityBid() {
+		try {
+			return utilitySpace.getMinUtilityBid();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
 
 	private Bid generateRandomBidAboveTarget() 
 	{
@@ -137,7 +176,7 @@ public class JohnyBlack extends AbstractNegotiationParty
 	 * Predict the valuation of an offer for an opponent.
 	 * @param offer The offer the opponent has made
 	 * @param issues The issues that the offer negotiates over
-	 * @return
+	 * @return The predicted utility value of the opponent
 	 */
 	private double predictValuation(Bid offer, List<Issue> issues)
 	{
