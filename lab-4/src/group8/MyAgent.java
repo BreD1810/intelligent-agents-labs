@@ -16,6 +16,8 @@ import genius.core.issue.IssueDiscrete;
 import genius.core.issue.ValueDiscrete;
 import genius.core.parties.AbstractNegotiationParty;
 import genius.core.parties.NegotiationInfo;
+import genius.core.uncertainty.BidRanking;
+import genius.core.uncertainty.UserModel;
 import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
 import genius.core.utility.EvaluatorDiscrete;
@@ -41,9 +43,18 @@ public class MyAgent extends AbstractNegotiationParty
 	{
 		super.init(info);
 		if (hasPreferenceUncertainty()) {
+			UserModel userModel = info.getUserModel();
+			BidRanking bidRanking = userModel.getBidRanking();
 			System.out.println("HAS PREFERENCE UNCERTAINTY!!!");
+			System.out.println("Agent ID: " + info.getAgentID());
+			System.out.println("No. of possible bids in domain: " + userModel.getDomain().getNumberOfPossibleBids());
+			System.out.println("No. of bids in preference ranking: " + bidRanking.getSize());
+			System.out.println("Elicitation cost: " + info.getUser().getElicitationCost());
+			System.out.println("Lowest utility bid: " + bidRanking.getMinimalBid());
+			System.out.println("Highest utility bid: " + bidRanking.getMaximalBid());
+			System.out.println("5th bid in ranking list: " + bidRanking.getBidOrder().get(4));
 		}
-		
+
 		AbstractUtilitySpace utilitySpace = info.getUtilitySpace();
 		AdditiveUtilitySpace additiveUtilitySpace = (AdditiveUtilitySpace) utilitySpace;
 
