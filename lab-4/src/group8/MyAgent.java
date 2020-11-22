@@ -1,9 +1,6 @@
 package group8;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 import genius.core.AgentID;
 import genius.core.Bid;
@@ -29,9 +26,8 @@ import genius.core.utility.EvaluatorDiscrete;
  */
 public class MyAgent extends AbstractNegotiationParty
 {
-	private static double MINIMUM_TARGET;
+	private static double rankThreshold;
 	private Bid lastOffer;
-	private double concedeThreshold;
 	private HashMap<Integer, HashMap<String, Integer>> frequencyTable = new HashMap<>();
 	private int noBids = 0;
 
@@ -85,10 +81,7 @@ public class MyAgent extends AbstractNegotiationParty
 
 			frequencyTable.put(issueNumber, issueHashMap);
 
-			double minUtility = getUtility(getMinUtilityBid());
-			double maxUtility = getUtility(getMaxUtilityBid());
-			concedeThreshold = (maxUtility + minUtility) / 2;
-			MINIMUM_TARGET = maxUtility;
+			rankThreshold = 0;
 		}
 	}
 
@@ -102,78 +95,69 @@ public class MyAgent extends AbstractNegotiationParty
 		// Check for acceptance if we have received an offer
 		if (lastOffer != null)
 		{
-			double timeDependentThreshold = concedeThreshold + ((1 - timeline.getTime()) * (getUtility(getMaxUtilityBid()) - concedeThreshold));
-			System.out.println("Current time threshold: " + timeDependentThreshold);
-			MINIMUM_TARGET = Math.max(timeDependentThreshold, concedeThreshold);
-			System.out.println("Minimum target: " + MINIMUM_TARGET);
-			System.out.println("Concede threshold: " + concedeThreshold);
+			rankThreshold = timeline.getTime();
+			System.out.println("Current threshold: " + rankThreshold);
 			System.out.println();
 			if (timeline.getTime() >= 0.99)
 			{
-				if (getUtility(lastOffer) >= concedeThreshold)
+				if (isRankAboveThreshold(lastOffer))
 					return new Accept(getPartyId(), lastOffer);
 				else
 					return new EndNegotiation(getPartyId());
 			}
-			else if (getUtility(lastOffer) >= MINIMUM_TARGET)
+			else if (isRankAboveThreshold(lastOffer))
 			{
 				return new Accept(getPartyId(), lastOffer);
 			}
 		}
 
 		// Otherwise, send out a random offer above the target utility 
-		return new Offer(getPartyId(), generateApproxParetoOfferAboveTarget(10));
-	}
-
-	private Bid getMaxUtilityBid() {
-		try {
-			return utilitySpace.getMaxUtilityBid();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	private Bid getMinUtilityBid() {
-		try {
-			return utilitySpace.getMinUtilityBid();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return null;
+		return new Offer(getPartyId(), getRandomBidAboveThreshold());
 	}
 
 	/**
-	 * Sample a number of bids above the threshold, and select one that is approximately pareto efficient
-	 * @param sampleSize The size of the sample to take
-	 * @return The approximately pareto efficient bid
+	 * Check if the rank of offer is above the threshold.
+	 * Elicit the offer if needed
+	 * @param bid
+	 * @return
 	 */
-	private Bid generateApproxParetoOfferAboveTarget(int sampleSize)
-	{
-		double maxOpponentUtil = 0;
-		Bid approxParetoBid = null;
-
-		for (int n = 0; n < sampleSize; n++)
-		{
-			Bid randomBid;
-			double util;
-			int i = 0;
-			// try 100 times to find a bid under the target utility
-			do
-			{
-				randomBid = generateRandomBid();
-				util = utilitySpace.getUtility(randomBid);
-
-				// Estimate opponent utility
-				double opponentUtil = predictValuation(randomBid);
-			}
-			while (util < MINIMUM_TARGET && i++ < 100);
-
-			if (util > maxOpponentUtil)
-				approxParetoBid = randomBid;
+	private boolean isRankAboveThreshold(Bid bid) {
+		// Check if bid is in current ranking
+		BidRanking bidRanking = userModel.getBidRanking();
+		List<Bid> bidOrder = bidRanking.getBidOrder();
+		if (bidOrder.contains(bid)) {
+			// True if above rank, false otherwise
+			int noRanks = bidRanking.getSize();
+			System.out.println("No. of ranks: " + noRanks);
+			int rank = noRanks - bidRanking.indexOf(bid); // Highest index is ranked best
+			System.out.println("Rank of bid: " + rank);
+			boolean result = rank <= (noRanks * rankThreshold);
+			System.out.println("Within threshold? " + result);
+			return result;
 		}
 
-		return approxParetoBid;
+		// Elicit the bid rank from the user
+		userModel = user.elicitRank(bid, userModel);
+		bidRanking = userModel.getBidRanking();
+		int noRanks = bidRanking.getSize();
+		System.out.println("No. of ranks: " + noRanks);
+		int rank = noRanks - bidRanking.indexOf(bid); // Highest index is ranked best
+		System.out.println("Rank of bid: " + rank);
+		boolean result = rank <= (noRanks * rankThreshold);
+		System.out.println("Within threshold? " + result);
+		return result;
+	}
+
+	private Bid getRandomBidAboveThreshold() {
+		BidRanking bidRanking = userModel.getBidRanking();
+		int noRanks = bidRanking.getSize();
+		System.out.println("No ranks: " + noRanks);
+		int thresholdedRanks = (int)(noRanks * rankThreshold);
+		System.out.println("Ranks within threshold: " + noRanks);
+		Random rand = new Random();
+		int randRank = rand.nextInt(thresholdedRanks + 1);
+		System.out.println("Random rank = " + randRank);
+		return bidRanking.getBidOrder().get(noRanks - randRank - 1);
 	}
 
 	/**
