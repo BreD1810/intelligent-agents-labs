@@ -4,19 +4,23 @@ import java.util.*;
 
 import genius.core.AgentID;
 import genius.core.Bid;
+import genius.core.Domain;
 import genius.core.actions.Accept;
 import genius.core.actions.Action;
 import genius.core.actions.EndNegotiation;
 import genius.core.actions.Offer;
 import genius.core.issue.Issue;
 import genius.core.issue.IssueDiscrete;
+import genius.core.issue.Objective;
 import genius.core.issue.ValueDiscrete;
 import genius.core.parties.AbstractNegotiationParty;
 import genius.core.parties.NegotiationInfo;
+import genius.core.uncertainty.AdditiveUtilitySpaceFactory;
 import genius.core.uncertainty.BidRanking;
 import genius.core.uncertainty.UserModel;
 import genius.core.utility.AbstractUtilitySpace;
 import genius.core.utility.AdditiveUtilitySpace;
+import genius.core.utility.Evaluator;
 import genius.core.utility.EvaluatorDiscrete;
 
 /**
@@ -30,6 +34,7 @@ public class MyAgent extends AbstractNegotiationParty
 	private Bid lastOffer;
 	private HashMap<Integer, HashMap<String, Integer>> frequencyTable = new HashMap<>();
 	private int noBids = 0;
+	private AdditiveUtilitySpace additiveUtilitySpace;
 
 	/**
 	 * Initializes a new instance of the agent.
@@ -52,7 +57,7 @@ public class MyAgent extends AbstractNegotiationParty
 		}
 
 		AbstractUtilitySpace utilitySpace = info.getUtilitySpace();
-		AdditiveUtilitySpace additiveUtilitySpace = (AdditiveUtilitySpace) utilitySpace;
+		additiveUtilitySpace = (AdditiveUtilitySpace) utilitySpace;
 
 		List<Issue> issues = additiveUtilitySpace.getDomain().getIssues();
 
@@ -280,12 +285,72 @@ public class MyAgent extends AbstractNegotiationParty
 	}
 
 	/**
-	 * This stub can be expanded to deal with preference uncertainty in a more sophisticated way than the default behavior.
+	 * A simple heuristic for estimating a discrete {@link AdditiveUtilitySpace} from a {@link BidRanking}.
+	 * Gives 0 points to all values occuring in the lowest ranked bid,
+	 * then 1 point to all values occuring in the second lowest bid, and so on.
 	 */
 	@Override
-	public AbstractUtilitySpace estimateUtilitySpace() 
+	public AbstractUtilitySpace estimateUtilitySpace()
 	{
-		return super.estimateUtilitySpace();
+		AdditiveUtilitySpace utilitySpace = setupUtilitySpace();
+
+		BidRanking bidRanking = userModel.getBidRanking();
+		double points = 0;
+		for (Bid bid : bidRanking.getBidOrder())
+		{
+			List<Issue> issues = bid.getIssues();
+			for (Issue issue : issues)
+			{
+				EvaluatorDiscrete evaluator = (EvaluatorDiscrete) utilitySpace.getEvaluator(issue);
+				int issueNo = issue.getNumber();
+				ValueDiscrete value = (ValueDiscrete) bid.getValue(issueNo);
+				double oldUtil = evaluator.getDoubleValue(value);
+				evaluator.setEvaluationDouble(value, oldUtil + points);
+			}
+			points += 1;
+		}
+		normaliseWeightsByMaxValues(utilitySpace);
+		return utilitySpace;
+	}
+
+	private AdditiveUtilitySpace setupUtilitySpace()
+	{
+		Domain domain = userModel.getDomain();
+		List<Issue> issues = domain.getIssues();
+		int noIssues = issues.size();
+		Map<Objective, Evaluator> evaluatorMap = new HashMap<>();
+		for (Issue issue : issues)
+		{
+			IssueDiscrete issueDiscrete = (IssueDiscrete) issue;
+			EvaluatorDiscrete evaluator = new EvaluatorDiscrete();
+			evaluator.setWeight(1.0 / noIssues);
+			for (ValueDiscrete value : issueDiscrete.getValues())
+				evaluator.setEvaluationDouble(value, 0.0);
+
+			evaluatorMap.put(issue, evaluator);
+		}
+
+		return new AdditiveUtilitySpace(domain, evaluatorMap);
+	}
+
+	private void normaliseWeightsByMaxValues(AdditiveUtilitySpace utilitySpace)
+	{
+		for (Issue issue : utilitySpace.getDomain().getIssues())
+		{
+			EvaluatorDiscrete evaluator = (EvaluatorDiscrete) utilitySpace.getEvaluator(issue);
+			evaluator.normalizeAll();
+		}
+		scaleAllValueFrom0To1(utilitySpace);
+		utilitySpace.normalizeWeights();
+	}
+
+	private void scaleAllValueFrom0To1(AdditiveUtilitySpace utilitySpace)
+	{
+		for (Issue issue : utilitySpace.getDomain().getIssues())
+		{
+			EvaluatorDiscrete evalutor = (EvaluatorDiscrete) utilitySpace.getEvaluator(issue);
+			evalutor.scaleAllValuesFrom0To1();;
+		}
 	}
 
 }
